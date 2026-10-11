@@ -952,7 +952,7 @@ public final class OngoingCallContext {
                 var unfilteredConnections: [CallSessionConnection]
                 unfilteredConnections = [connections.primary] + connections.alternatives
                 
-                if version == "12.0.0" {
+                if false && version == "12.0.0" {
                     for connection in unfilteredConnections {
                         if case let .reflector(reflector) = connection {
                             unfilteredConnections.append(.reflector(CallSessionConnection.Reflector(
