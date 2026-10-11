@@ -1,0 +1,62 @@
+name: Build VerdGram iOS IPA
+on:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          submodules: false
+      - name: Fix relative submodule URLs
+        run: |
+          sed -i '' -E 's#url[ ]*=[ ]*\.\./(.*)#url = https://github.com/TelegramMessenger/\1#' .gitmodules
+          git submodule sync --recursive
+      - name: Checkout submodules
+        run: git submodule update --init --recursive --depth 1 --jobs 8
+      - name: Select Xcode
+        run: |
+          set -euo pipefail
+          XV="$(python3 -c 'import json; print(json.load(open("versions.json"))["xcode"])')"
+          DD="/Applications/Xcode_${XV}.app/Contents/Developer"
+          if [ ! -d "$DD" ]; then
+            C="$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)"
+            DD="${C}/Contents/Developer"
+          fi
+          sudo xcode-select -s "$DD"
+          xcodebuild -version
+      - name: Prepare Metal toolchain
+        run: |
+          if ! xcrun -f metal >/dev/null 2>&1; then
+            sudo xcodebuild -downloadComponent MetalToolchain
+          fi
+          xcrun -f metal
+      - name: Cache Bazel
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.bazel-cache
+          key: bazel-verdgram-${{ hashFiles('versions.json') }}
+          restore-keys: bazel-verdgram-
+      - name: Build IPA
+        run: |
+          set -euxo pipefail
+          BN=$(( $(git rev-list --count HEAD) + $(cat build_number_offset) ))
+          python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
+          python3 -u build-system/Make/Make.py \
+            --bazelUserRoot="/private/var/tmp/_bazel_runner" \
+            --cacheDir="$GITHUB_WORKSPACE/.bazel-cache" \
+            build \
+            --configurationPath=build-system/verdgram-configuration.json \
+            --codesigningInformationPath=build-system/fake-codesigning \
+            --configuration=release_arm64 \
+            --buildNumber="$BN" \
+            --disableExtensions
+          mkdir -p out
+          cp bazel-out/applebin_ios-ios_arm*-opt-ST-*/bin/Telegram/Telegram.ipa out/VerdGram.ipa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VerdGram-ios-ipa
+          path: out/VerdGram.ipa
+          retention-days: 14
