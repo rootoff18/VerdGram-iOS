@@ -46,13 +46,13 @@ jobs:
           python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
           python3 -u build-system/Make/Make.py \
             --bazelUserRoot="/private/var/tmp/_bazel_runner" \
+            --bazelArguments="--//Telegram:disableExtensions" \
             --cacheDir="$GITHUB_WORKSPACE/.bazel-cache" \
             build \
             --configurationPath=build-system/verdgram-configuration.json \
             --codesigningInformationPath=build-system/fake-codesigning \
             --configuration=release_arm64 \
-            --buildNumber="$BN" \
-            --disableExtensions
+            --buildNumber="$BN"
           mkdir -p out
           cp bazel-out/applebin_ios-ios_arm*-opt-ST-*/bin/Telegram/Telegram.ipa out/VerdGram.ipa
       - uses: actions/upload-artifact@v4
