@@ -34,10 +34,10 @@ jobs:
           fi
           xcrun -f metal
       - name: Cache Bazel
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: ${{ github.workspace }}/.bazel-cache
-          key: bazel-verdgram-${{ hashFiles('versions.json') }}
+          key: bazel-verdgram-${{ github.run_id }}
           restore-keys: bazel-verdgram-
       - name: Build IPA
         run: |
@@ -46,7 +46,6 @@ jobs:
           python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
           python3 -u build-system/Make/Make.py \
             --bazelUserRoot="/private/var/tmp/_bazel_runner" \
-            --bazelArguments="--//Telegram:disableExtensions" \
             --cacheDir="$GITHUB_WORKSPACE/.bazel-cache" \
             build \
             --configurationPath=build-system/verdgram-configuration.json \
@@ -54,7 +53,20 @@ jobs:
             --configuration=release_arm64 \
             --buildNumber="$BN"
           mkdir -p out
-          cp bazel-out/applebin_ios-ios_arm*-opt-ST-*/bin/Telegram/Telegram.ipa out/VerdGram.ipa
+          IPA="$(find -L bazel-bin/Telegram -maxdepth 1 -name Telegram.ipa | head -1)"
+          echo "IPA=$IPA"
+          test -f "$IPA"
+          rm -rf /tmp/ipa && mkdir -p /tmp/ipa
+          unzip -q "$IPA" -d /tmp/ipa
+          rm -rf /tmp/ipa/Payload/*.app/PlugIns /tmp/ipa/Payload/*.app/Watch
+          (cd /tmp/ipa && zip -qry "$GITHUB_WORKSPACE/out/VerdGram.ipa" Payload)
+          ls -lh out
+      - name: Save Bazel cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/.bazel-cache
+          key: bazel-verdgram-${{ github.run_id }}
       - uses: actions/upload-artifact@v4
         with:
           name: VerdGram-ios-ipa
